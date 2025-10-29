@@ -37,7 +37,7 @@ This extension is not on the Chrome Web Store. To install it, you need to load i
 
 1.  Clone the repository or download and unzip the project files:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/Pravin-dev06/PDF-Assistant
     ```
 2.  Open Google Chrome and navigate to `chrome://extensions/`.
 3.  Enable "Developer mode" using the toggle in the top-right corner.
