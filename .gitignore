@@ -1,0 +1,5 @@
+# Ignore Node.js dependency folder
+/node_modules
+
+# Ignore system files
+.DS_Store

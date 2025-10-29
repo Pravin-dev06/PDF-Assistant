@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Assistant</title>
+    
+    <link rel="stylesheet" href="pdfjs/web/viewer.css">
+
+    <style>
+        body { background-color: #f7f9fc; font-family: sans-serif; margin: 0; padding: 0 20px; }
+        * { box-sizing: border-box; }
+        
+        .pdf-viewer-container {
+            overflow: auto;
+            height: calc(100vh - 120px);
+            background-color: #525659;
+        }
+        
+        #pdfPageWrapper {
+            margin: 20px auto; 
+            width: fit-content;
+            position: relative; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        #pdfCanvas {
+            display: block;
+        }
+
+
+        #pageInfo {
+            color: black;
+        }
+        .textLayer > span::selection {
+            background-color: rgba(0, 100, 255, 0.4);
+        }
+
+        #aiPromptModal {
+            color: black;
+
+        }
+
+        #coordsDisplay { position: fixed; bottom: 10px; right: 10px; background-color: rgba(0, 0, 0, 0.75); color: white; padding: 8px 12px; border-radius: 8px; font-family: monospace; font-size: 14px; z-index: 100; }
+        .hidden { display: none !important; }
+        .controls { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; background-color: #fff; border-bottom: 1px solid #ddd; }
+        
+        /* Modal Styling */
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 200; border-radius: 8px; min-width: 300px; }
+        .modal h3 { margin-top: 0; }
+        .modal button { padding: 8px 15px; margin-left: 10px; cursor: pointer; border: none; border-radius: 4px; }
+        .modal input[type="text"], .modal select, .modal textarea { padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 4px; }
+        
+        /* AI Modal Specific Styles */
+        #aiPromptModal #confirmAiPrompt { background-color: #007bff; color: white; }
+        #aiPromptModal #cancelAiPrompt { background-color: #6c757d; color: white; }
+        
+        /* --- STYLES for Remove Buttons --- */
+        .context-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .context-header p {
+            margin-top: 0;
+            margin-bottom: 5px;
+        }
+        .remove-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+            line-height: 0.5;
+            padding: 0 5px;
+            margin-left: 0;
+        }
+        .remove-btn:hover {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loadingMessage">Loading PDF...</div>
+    <div id="viewer" class="hidden">
+        <div class="controls">
+            <button id="prevPage">&lt; Prev</button>
+            <span id="pageInfo"></span>
+            <button id="nextPage">Next &gt;</button>
+            <button id="selectAreaBtn">Select Area</button>
+            <button id="summarizeDocBtn" style="background-color: #17a2b8; color: white;">Summarize Document</button>
+        </div>
+        <div class="pdf-viewer-container" id="pdfViewerContainer">
+            <div id="pdfPageWrapper">
+                <canvas id="pdfCanvas"></canvas>
+                <div id="selectionOverlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; z-index: 10;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="coordsDisplay">Select text or an area to use the AI assistant.</div>
+    
+    <!-- AI ASSISTANT MODAL -->
+    <div id="aiPromptModal" class="modal hidden" style="min-width: 450px; max-width: 90vw;">
+        <h3>On-Device AI Assistant</h3>
+        
+        <div id="selectedImageContainer" class="hidden">
+            <div class="context-header">
+                 <p><strong>Selected Area:</strong></p>
+                 <button id="removeImageContextBtn" class="remove-btn" title="Remove Image">&times;</button>
+            </div>
+             <img id="selectedImagePreview" style="max-width: 100%; max-height: 150px; border: 1px solid #ccc; margin-bottom: 15px; object-fit: contain;">
+        </div>
+
+        <div id="selectedTextContainer" class="hidden">
+            <div class="context-header">
+                <p><strong>Selected Text:</strong></p>
+                <button id="removeTextContextBtn" class="remove-btn" title="Remove Text">&times;</button>
+            </div>
+            <div id="selectedTextPreview" style="max-height: 100px; overflow-y: auto; background-color: #161313; padding: 8px; border-radius: 4px; margin-bottom: 15px; font-family: monospace; white-space: pre-wrap; color: white;"></div>
+        </div>
+        
+        <button id="addImageContextBtn" style="width: 100%; padding: 8px; margin-bottom: 15px; background-color: #e9ecef; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; color:black;">
+            + Add Image Context
+        </button>
+
+        <label for="aiActionSelect"><strong>Choose an action:</strong></label>
+        <select id="aiActionSelect" style="width: 100%; padding: 8px; margin-bottom: 15px;">
+            <option value="summarize">Summarize Text</option>
+            <option value="extractTable">Extract Table from Area</option>
+            <option value="custom" selected>Custom Prompt</option>
+        </select>
+
+        <div id="summarizerOptions" class="hidden">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label for="summarizerType">Type:</label>
+                    <select id="summarizerType" style="width: 100%; padding: 5px;">
+                        <option value="key-points" selected>Key Points</option>
+                        <option value="tldr">TL;DR</option>
+                        <option value="teaser">Teaser</option>
+                        <option value="headline">Headline</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label for="summarizerLength">Length:</label>
+                    <select id="summarizerLength" style="width: 100%; padding: 5px;">
+                        <option value="short">Short</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="long">Long</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="customPromptOptions">
+            <input type="text" id="aiPromptInput" placeholder="e.g., 'Describe this chart in detail'" style="padding: 8px; margin-bottom: 15px; width: 100%; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <div style="text-align: right;">
+            <button id="confirmAiPrompt" style="padding: 8px 15px; cursor: pointer; border: none; border-radius: 4px;">Generate</button>
+            <button id="cancelAiPrompt" style="padding: 8px 15px; margin-left: 10px; cursor: pointer; border: none; border-radius: 4px;">Cancel</button>
+        </div>
+        <div id="aiStatus" style="margin-top: 10px; color: grey; font-size: 0.9em;"></div>
+    </div>
+    
+    <!-- DOCUMENT SUMMARY MODAL -->
+    <div id="docSummaryModal" class="modal hidden" style="min-width: 500px; max-width: 90vw;">
+        <h3>Document Summary</h3>
+        <div id="docSummaryStatus" style="margin-bottom: 10px; color: grey;"></div>
+        <textarea id="docSummaryOutput" readonly style="width: 100%; height: 300px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: sans-serif; font-size: 14px; resize: vertical;"></textarea>
+        <div style="text-align: right; margin-top: 15px;">
+            <button id="copySummaryBtn" style="background-color: #007bff; color: white;">Copy</button>
+            <button id="closeSummaryBtn" style="background-color: #6c757d; color: white;">Close</button>
+        </div>
+    </div>
+
+    <!-- TABLE EXTRACTOR MODAL -->
+    <div id="tableExtractorModal" class="modal hidden" style="min-width: 500px; max-width: 90vw;">
+        <h3>Extracted Table Data</h3>
+        <div id="tableExtractorStatus" style="margin-bottom: 10px; color: grey;"></div>
+        <!-- This container gives option to copy the table content either as JSON or CSV -->
+        <div id="tablePreviewContainer" style="max-height: 300px; overflow: auto; border: 1px solid #ccc; margin-bottom: 15px; padding: 20px; background-color: #f8f9fa;">
+            <!-- A confirmation message will be generated here by viewer.js -->
+        </div>
+        <div style="text-align: right; margin-top: 15px;">
+            <button id="copyTableJsonBtn" style="background-color: #007bff; color: white;">Copy as JSON</button>
+            <button id="copyTableCsvBtn" style="background-color: #17a2b8; color: white;">Copy as CSV</button>
+            <button id="closeTableExtractorBtn" style="background-color: #6c757d; color: white;">Close</button>
+        </div>
+    </div>
+
+    <script type="module" src="viewer.js"></script>
+
+</body>
+</html>

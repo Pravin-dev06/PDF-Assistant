@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "PDF Assistant",
+  "version": "1.0",
+  "description": "Supercharge PDFs with on-device AI. Summarize text, extract tables, and chat with your documents, all 100% privately",
+  "permissions": ["downloads"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "icons": {
+    "16": "images/LOGO-16.png",
+    "32": "images/LOGO-32.png",
+    "48": "images/LOGO-48.png",
+    "128": "images/LOGO-128.png"
+  },
+
+  "action": {
+    "default_icon": {
+      "16": "images/LOGO-16.png",
+      "32": "images/LOGO-32.png"
+    },
+    "default_title": "PDF Assistant"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "viewer.html",
+        "viewer.js",
+        "pdfjs/build/pdf.mjs",
+        "pdfjs/build/pdf.worker.mjs",
+        "pdf-lib/pdf-lib.min.js",
+        "pdfjs/web/viewer.css",
+        "pdfjs/web/standard_fonts/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
